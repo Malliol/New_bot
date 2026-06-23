@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>News Relay — Админка</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* Telegram CSS-переменные темы */
+    :root {
+      --bg:         var(--tg-theme-bg-color, #18222d);
+      --bg2:        var(--tg-theme-secondary-bg-color, #232e3c);
+      --text:       var(--tg-theme-text-color, #ffffff);
+      --hint:       var(--tg-theme-hint-color, #7d8b99);
+      --link:       var(--tg-theme-link-color, #5288c1);
+      --accent:     var(--tg-theme-button-color, #5288c1);
+      --accent-txt: var(--tg-theme-button-text-color, #ffffff);
+      --destructive:var(--tg-theme-destructive-text-color, #e53935);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* ── Шапка ── */
+    header {
+      background: var(--bg2);
+      padding: 16px 16px 0;
+      position: sticky; top: 0; z-index: 10;
+    }
+    header h1 {
+      font-size: 17px; font-weight: 600;
+      text-align: center;
+      padding-bottom: 12px;
+    }
+
+    /* ── Табы ── */
+    .tabs {
+      display: flex; gap: 4px;
+    }
+    .tab {
+      flex: 1; padding: 10px 0;
+      text-align: center; font-size: 14px; font-weight: 500;
+      color: var(--hint);
+      background: transparent; border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer; transition: color .15s, border-color .15s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Контент ── */
+    main { padding: 16px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Секция ── */
+    .section-title {
+      font-size: 12px; font-weight: 600;
+      color: var(--hint); text-transform: uppercase;
+      letter-spacing: .06em;
+      margin: 0 4px 8px;
+    }
+
+    /* ── Список элементов ── */
+    .list {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .list-item {
+      display: flex; align-items: center;
+      padding: 12px 14px; gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item-text {
+      flex: 1; font-size: 15px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .list-empty {
+      padding: 20px 14px;
+      text-align: center; color: var(--hint); font-size: 14px;
+    }
+
+    /* ── Кнопка удаления ── */
+    .btn-del {
+      width: 28px; height: 28px; flex-shrink: 0;
+      border-radius: 50%; border: none;
+      background: rgba(229,57,53,.15);
+      color: var(--destructive);
+      font-size: 16px; line-height: 1;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    .btn-del:hover { background: rgba(229,57,53,.28); }
+
+    /* ── Форма добавления ── */
+    .add-row {
+      display: flex; gap: 8px; margin-bottom: 8px;
+    }
+    .add-row input {
+      flex: 1;
+      background: var(--bg2); color: var(--text);
+      border: 1.5px solid transparent;
+      border-radius: var(--radius);
+      padding: 10px 14px; font-size: 15px;
+      outline: none; transition: border-color .15s;
+    }
+    .add-row input:focus { border-color: var(--accent); }
+    .add-row input::placeholder { color: var(--hint); }
+    .btn-add {
+      padding: 10px 18px;
+      background: var(--accent); color: var(--accent-txt);
+      border: none; border-radius: var(--radius);
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      transition: opacity .15s;
+    }
+    .btn-add:active { opacity: .75; }
+
+    /* ── Кнопка очистки ── */
+    .btn-clear {
+      width: 100%; padding: 12px;
+      background: rgba(229,57,53,.1); color: var(--destructive);
+      border: none; border-radius: var(--radius);
+      font-size: 15px; font-weight: 500;
+      cursor: pointer; margin-bottom: 16px;
+      transition: background .15s;
+    }
+    .btn-clear:hover { background: rgba(229,57,53,.2); }
+
+    /* ── Подсказки ── */
+    .hint-text {
+      font-size: 12px; color: var(--hint);
+      margin: 6px 4px 16px; line-height: 1.5;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #333e4a; color: #fff;
+      padding: 10px 20px; border-radius: 20px;
+      font-size: 14px; white-space: nowrap;
+      opacity: 0; transition: opacity .2s;
+      pointer-events: none; z-index: 100;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Лоадер ── */
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid rgba(255,255,255,.15);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 40px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📡 News Relay</h1>
+  <div class="tabs">
+    <button class="tab active" data-tab="channels">Каналы</button>
+    <button class="tab"        data-tab="keywords">Ключевые слова</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Каналы ── -->
+  <div class="panel active" id="panel-channels">
+    <p class="hint-text">Telegram-каналы, из которых пересылаются посты во ВКонтакте.</p>
+
+    <div class="add-row">
+      <input id="inp-channel" type="text" placeholder="@channel или t.me/channel" autocomplete="off" />
+      <button class="btn-add" onclick="addChannel()">Добавить</button>
+    </div>
+
+    <div class="section-title">Отслеживаемые каналы</div>
+    <div class="list" id="list-channels"><div class="spinner"></div></div>
+  </div>
+
+  <!-- ── Ключевые слова ── -->
+  <div class="panel" id="panel-keywords">
+    <p class="hint-text">
+      Пост пересылается, только если содержит хотя бы одно из слов (без учёта регистра).
+      Если список пуст — пересылается всё.
+    </p>
+
+    <div class="add-row">
+      <input id="inp-keyword" type="text" placeholder="ключевое слово" autocomplete="off" />
+      <button class="btn-add" onclick="addKeyword()">Добавить</button>
+    </div>
+
+    <div class="section-title">Слова-триггеры</div>
+    <div class="list" id="list-keywords"><div class="spinner"></div></div>
+
+    <button class="btn-clear" onclick="clearKeywords()">🗑 Удалить все слова (пересылать всё)</button>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+
+  // ── Авторизация ───────────────────────────────────────────────────────────
+  const INIT_DATA = tg.initData;
+
+  async function api(method, path, body) {
+    const opts = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Init-Data": INIT_DATA,
+      },
+    };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  // ── Табы ─────────────────────────────────────────────────────────────────
+  document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+    });
+  });
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let _toastTimer;
+  function toast(msg, ok = true) {
+    const el = document.getElementById("toast");
+    el.textContent = (ok ? "✓ " : "✗ ") + msg;
+    el.classList.add("show");
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+  }
+
+  // ── Рендер списков ────────────────────────────────────────────────────────
+  function renderChannels(items) {
+    const el = document.getElementById("list-channels");
+    if (!items.length) {
+      el.innerHTML = '<div class="list-empty">Нет каналов. Добавьте первый ↑</div>';
+      return;
+    }
+    el.innerHTML = items.map(c => `
+      <div class="list-item">
+        <span class="list-item-text">${escHtml(c)}</span>
+        <button class="btn-del" title="Удалить" onclick="removeChannel('${escAttr(c)}')">✕</button>
+      </div>`).join("");
+  }
+
+  function renderKeywords(items) {
+    const el = document.getElementById("list-keywords");
+    if (!items.length) {
+      el.innerHTML = '<div class="list-empty">Слова не заданы — пересылается всё</div>';
+      return;
+    }
+    el.innerHTML = items.map(k => `
+      <div class="list-item">
+        <span class="list-item-text">${escHtml(k)}</span>
+        <button class="btn-del" title="Удалить" onclick="removeKeyword('${escAttr(k)}')">✕</button>
+      </div>`).join("");
+  }
+
+  // ── Загрузка данных ───────────────────────────────────────────────────────
+  async function loadAll() {
+    try {
+      const [channels, keywords] = await Promise.all([
+        api("GET", "/api/channels"),
+        api("GET", "/api/keywords"),
+      ]);
+      renderChannels(channels);
+      renderKeywords(keywords);
+    } catch (e) {
+      toast("Ошибка загрузки: " + e.message, false);
+    }
+  }
+
+  // ── Каналы ────────────────────────────────────────────────────────────────
+  async function addChannel() {
+    const inp = document.getElementById("inp-channel");
+    const val = inp.value.trim();
+    if (!val) return;
+    try {
+      await api("POST", "/api/channels", { handle: val });
+      inp.value = "";
+      const channels = await api("GET", "/api/channels");
+      renderChannels(channels);
+      toast("Канал добавлен");
+      tg.HapticFeedback.notificationOccurred("success");
+    } catch (e) {
+      toast(e.message, false);
+      tg.HapticFeedback.notificationOccurred("error");
+    }
+  }
+
+  async function removeChannel(handle) {
+    tg.showConfirm(`Удалить канал ${handle}?`, async (ok) => {
+      if (!ok) return;
+      try {
+        await api("DELETE", "/api/channels/" + encodeURIComponent(handle));
+        const channels = await api("GET", "/api/channels");
+        renderChannels(channels);
+        toast("Канал удалён");
+      } catch (e) {
+        toast(e.message, false);
+      }
+    });
+  }
+
+  // ── Ключевые слова ────────────────────────────────────────────────────────
+  async function addKeyword() {
+    const inp = document.getElementById("inp-keyword");
+    const val = inp.value.trim();
+    if (!val) return;
+    try {
+      await api("POST", "/api/keywords", { word: val });
+      inp.value = "";
+      const keywords = await api("GET", "/api/keywords");
+      renderKeywords(keywords);
+      toast("Слово добавлено");
+      tg.HapticFeedback.notificationOccurred("success");
+    } catch (e) {
+      toast(e.message, false);
+      tg.HapticFeedback.notificationOccurred("error");
+    }
+  }
+
+  async function removeKeyword(word) {
+    try {
+      await api("DELETE", "/api/keywords/" + encodeURIComponent(word));
+      const keywords = await api("GET", "/api/keywords");
+      renderKeywords(keywords);
+      toast("Слово удалено");
+    } catch (e) {
+      toast(e.message, false);
+    }
+  }
+
+  async function clearKeywords() {
+    tg.showConfirm("Удалить все ключевые слова?\nБот будет пересылать все посты.", async (ok) => {
+      if (!ok) return;
+      try {
+        await api("DELETE", "/api/keywords");
+        renderKeywords([]);
+        toast("Все слова удалены");
+      } catch (e) {
+        toast(e.message, false);
+      }
+    });
+  }
+
+  // ── Enter в полях ввода ───────────────────────────────────────────────────
+  document.getElementById("inp-channel").addEventListener("keydown", e => {
+    if (e.key === "Enter") addChannel();
+  });
+  document.getElementById("inp-keyword").addEventListener("keydown", e => {
+    if (e.key === "Enter") addKeyword();
+  });
+
+  // ── Экранирование ─────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+  function escAttr(s) {
+    return s.replace(/'/g, "\\'");
+  }
+
+  // ── Старт ─────────────────────────────────────────────────────────────────
+  loadAll();
+</script>
+</body>
+</html>

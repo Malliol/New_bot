@@ -1,0 +1,28 @@
+# Cloudflare Worker — News Relay Admin
+# Деплой: wrangler deploy
+# Создать KV: wrangler kv namespace create "NEWS_RELAY_SETTINGS"
+
+name = "news-relay-admin"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# ── Статические файлы ─────────────────────────────────────────────────────────
+# index.html из папки public/ отдаётся автоматически для /
+# Worker перехватывает только /api/*
+[assets]
+directory = "./public"
+
+# ── KV: хранение каналов и ключевых слов ─────────────────────────────────────
+# Заменить id и preview_id после создания: wrangler kv namespace create "NEWS_RELAY_SETTINGS"
+[[kv_namespaces]]
+binding = "KV"
+id     = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# ── Переменные (не секреты) ───────────────────────────────────────────────────
+[vars]
+# Ваш Telegram user ID — кто имеет доступ к панели
+ADMIN_TG_ID = "REPLACE_WITH_YOUR_TELEGRAM_USER_ID"
+
+# ── Секреты (задать через CLI, не хранить здесь) ──────────────────────────────
+# wrangler secret put BOT_TOKEN
+# → вставить токен бота от @BotFather
