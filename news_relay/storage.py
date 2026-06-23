@@ -1,10 +1,10 @@
 """
-SQLite-хранилище для дедупликации отправленных постов.
+SQLite-хранилище только для дедупликации отправленных постов.
+Настройки бота (каналы, ключевые слова) хранятся в config.json.
 """
 
 import sqlite3
 import logging
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,6 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 
 def is_already_sent(conn: sqlite3.Connection, channel_id: str, message_id: int) -> bool:
-    """Вернуть True, если пост уже был отправлен."""
     row = conn.execute(
         "SELECT 1 FROM sent_posts WHERE channel_id = ? AND message_id = ?",
         (channel_id, message_id),
@@ -43,7 +42,6 @@ def is_already_sent(conn: sqlite3.Connection, channel_id: str, message_id: int) 
 
 
 def mark_as_sent(conn: sqlite3.Connection, channel_id: str, message_id: int) -> None:
-    """Пометить пост как отправленный (игнорировать дубликат)."""
     try:
         conn.execute(
             "INSERT OR IGNORE INTO sent_posts (channel_id, message_id) VALUES (?, ?)",
