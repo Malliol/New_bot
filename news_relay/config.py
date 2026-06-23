@@ -1,7 +1,8 @@
 """
 Загрузка конфигурации:
   - .env         — секреты и неизменяемые параметры
-  - config.json  — рабочие настройки (каналы, ключевые слова)
+  - config.json  — рабочие настройки (каналы, ключевые слова);
+                   обновляется автоматически из Cloudflare KV через kv_sync.py
 """
 
 import json
@@ -37,18 +38,28 @@ class EnvConfig:
     tg_api_id: int
     tg_api_hash: str
     tg_session_name: str
-    admin_tg_id: int        # Telegram user ID администратора
-    bot_token: str          # BotFather-токен (для Mini App кнопки)
-    webapp_url: str         # Публичный HTTPS-адрес Mini App
-    webapp_port: int        # Порт FastAPI-сервера
+    admin_tg_id: int
+
+    # BotFather-токен — для кнопки /admin → Mini App
+    bot_token: str
+    # Публичный URL воркера (https://news-relay-admin.workers.dev или свой домен)
+    webapp_url: str
+
+    # VK
     vk_token: str
     vk_peer_id: int
+
+    # Cloudflare KV — для синхронизации настроек на VPS
+    cf_account_id: str
+    cf_kv_namespace_id: str
+    cf_api_token: str
+
+    # Логирование
     log_file: str
     log_level: str
 
 
 def load_env_config() -> EnvConfig:
-    """Загрузить и провалидировать .env."""
     try:
         api_id = int(_require("TG_API_ID"))
     except ValueError:
@@ -62,12 +73,7 @@ def load_env_config() -> EnvConfig:
     try:
         admin_id = int(_require("ADMIN_TG_ID"))
     except ValueError:
-        raise EnvironmentError("ADMIN_TG_ID должен быть числом (Telegram user ID)")
-
-    try:
-        webapp_port = int(_optional("WEBAPP_PORT", "8080"))
-    except ValueError:
-        raise EnvironmentError("WEBAPP_PORT должен быть числом")
+        raise EnvironmentError("ADMIN_TG_ID должен быть числом")
 
     return EnvConfig(
         tg_api_id=api_id,
@@ -76,15 +82,17 @@ def load_env_config() -> EnvConfig:
         admin_tg_id=admin_id,
         bot_token=_require("BOT_TOKEN"),
         webapp_url=_require("WEBAPP_URL").rstrip("/"),
-        webapp_port=webapp_port,
         vk_token=_require("VK_TOKEN"),
         vk_peer_id=peer_id,
+        cf_account_id=_require("CF_ACCOUNT_ID"),
+        cf_kv_namespace_id=_require("CF_KV_NAMESPACE_ID"),
+        cf_api_token=_require("CF_API_TOKEN"),
         log_file=_optional("LOG_FILE", "news_relay.log"),
         log_level=_optional("LOG_LEVEL", "INFO").upper(),
     )
 
 
-# ── Рабочие настройки в config.json ──────────────────────────────────────────
+# ── config.json (синхронизируется из KV) ─────────────────────────────────────
 
 @dataclass
 class Settings:
@@ -105,14 +113,3 @@ def load_settings() -> Settings:
     except (json.JSONDecodeError, OSError) as e:
         logger.error("Не удалось прочитать %s: %s", SETTINGS_FILE, e)
         return Settings()
-
-
-def save_settings(settings: Settings) -> None:
-    """Записать настройки в config.json."""
-    try:
-        SETTINGS_FILE.write_text(
-            json.dumps(asdict(settings), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except OSError as e:
-        logger.error("Не удалось сохранить %s: %s", SETTINGS_FILE, e)
