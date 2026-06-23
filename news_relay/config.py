@@ -1,8 +1,7 @@
 """
 Загрузка конфигурации:
-  - .env         — секреты и неизменяемые параметры (API-ключи, токены)
-  - config.json  — рабочие настройки (каналы, ключевые слова); редактируется
-                   через Telegram-команды администратора
+  - .env         — секреты и неизменяемые параметры
+  - config.json  — рабочие настройки (каналы, ключевые слова)
 """
 
 import json
@@ -20,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = Path("config.json")
 
-
-# ── Секреты из .env ───────────────────────────────────────────────────────────
 
 def _require(key: str) -> str:
     value = os.getenv(key, "").strip()
@@ -41,6 +38,9 @@ class EnvConfig:
     tg_api_hash: str
     tg_session_name: str
     admin_tg_id: int        # Telegram user ID администратора
+    bot_token: str          # BotFather-токен (для Mini App кнопки)
+    webapp_url: str         # Публичный HTTPS-адрес Mini App
+    webapp_port: int        # Порт FastAPI-сервера
     vk_token: str
     vk_peer_id: int
     log_file: str
@@ -64,11 +64,19 @@ def load_env_config() -> EnvConfig:
     except ValueError:
         raise EnvironmentError("ADMIN_TG_ID должен быть числом (Telegram user ID)")
 
+    try:
+        webapp_port = int(_optional("WEBAPP_PORT", "8080"))
+    except ValueError:
+        raise EnvironmentError("WEBAPP_PORT должен быть числом")
+
     return EnvConfig(
         tg_api_id=api_id,
         tg_api_hash=_require("TG_API_HASH"),
         tg_session_name=_optional("TG_SESSION_NAME", "news_relay_session"),
         admin_tg_id=admin_id,
+        bot_token=_require("BOT_TOKEN"),
+        webapp_url=_require("WEBAPP_URL").rstrip("/"),
+        webapp_port=webapp_port,
         vk_token=_require("VK_TOKEN"),
         vk_peer_id=peer_id,
         log_file=_optional("LOG_FILE", "news_relay.log"),
@@ -80,10 +88,6 @@ def load_env_config() -> EnvConfig:
 
 @dataclass
 class Settings:
-    """
-    Редактируемые настройки бота.
-    Хранятся в config.json, изменяются через Telegram-команды.
-    """
     channels: List[str] = field(default_factory=list)
     keywords: List[str] = field(default_factory=list)
 
