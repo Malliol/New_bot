@@ -52,6 +52,13 @@ class EnvConfig:
     cf_kv_namespace_id: Optional[str]
     cf_api_token: Optional[str]
 
+    # Прокси (опционально — для обхода блокировок Telegram)
+    proxy_host: Optional[str]
+    proxy_port: Optional[int]
+    proxy_type: str          # SOCKS5 / SOCKS4 / HTTP
+    proxy_user: Optional[str]
+    proxy_pass: Optional[str]
+
     # Логирование
     log_file: str
     log_level: str
@@ -95,6 +102,11 @@ def load_env_config() -> EnvConfig:
         cf_account_id=_optional("CF_ACCOUNT_ID") or None,
         cf_kv_namespace_id=_optional("CF_KV_NAMESPACE_ID") or None,
         cf_api_token=_optional("CF_API_TOKEN") or None,
+        proxy_host=_optional("TG_PROXY_HOST") or None,
+        proxy_port=int(_optional("TG_PROXY_PORT", "0")) or None,
+        proxy_type=_optional("TG_PROXY_TYPE", "SOCKS5"),
+        proxy_user=_optional("TG_PROXY_USER") or None,
+        proxy_pass=_optional("TG_PROXY_PASS") or None,
         log_file=_optional("LOG_FILE", "news_relay.log"),
         log_level=_optional("LOG_LEVEL", "INFO").upper(),
     )

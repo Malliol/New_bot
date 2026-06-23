@@ -32,7 +32,19 @@ def _post_url(username: str, message_id: int) -> str:
 
 
 def build_client(cfg: EnvConfig) -> TelegramClient:
-    return TelegramClient(cfg.tg_session_name, cfg.tg_api_id, cfg.tg_api_hash)
+    proxy = None
+    if cfg.proxy_host and cfg.proxy_port:
+        import socks
+        proxy_type = {
+            "SOCKS5": socks.SOCKS5,
+            "SOCKS4": socks.SOCKS4,
+            "HTTP":   socks.HTTP,
+        }.get(cfg.proxy_type.upper(), socks.SOCKS5)
+        proxy = (proxy_type, cfg.proxy_host, cfg.proxy_port,
+                 True, cfg.proxy_user, cfg.proxy_pass)
+        logger.info("Используется прокси: %s %s:%d", cfg.proxy_type, cfg.proxy_host, cfg.proxy_port)
+
+    return TelegramClient(cfg.tg_session_name, cfg.tg_api_id, cfg.tg_api_hash, proxy=proxy)
 
 
 def register_handlers(client: TelegramClient, cfg: EnvConfig, db: sqlite3.Connection) -> None:
