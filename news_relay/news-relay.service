@@ -1,0 +1,30 @@
+[Unit]
+Description=Telegram → VK News Relay Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=newsrelay
+WorkingDirectory=/opt/news_relay
+ExecStart=/opt/news_relay/.venv/bin/python main.py
+
+# Автоперезапуск при падении (до 5 раз, пауза 10 сек)
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Перенаправить stdout/stderr в journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=news-relay
+
+# Безопасность: минимальные привилегии
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/news_relay
+
+[Install]
+WantedBy=multi-user.target
