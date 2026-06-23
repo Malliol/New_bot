@@ -1,9 +1,10 @@
 """
-Точка входа VPS-компонента.
-Запускает три задачи параллельно:
-  1. Telethon user-клиент — слушает каналы + /status в личке
-  2. Bot polling          — BotFather-бот с кнопкой /admin → Mini App
-  3. KV sync              — каждые 30 сек тянет настройки из Cloudflare KV
+Точка входа.
+
+Запускает компоненты в зависимости от наличия переменных в .env:
+  - Всегда:    Telethon user-клиент (слушает каналы + текстовые команды)
+  - Если BOT_TOKEN + WEBAPP_URL:   Bot polling (кнопка /admin → Mini App)
+  - Если CF_*:                     KV sync (настройки из Cloudflare KV)
 """
 
 import asyncio
@@ -12,9 +13,7 @@ import signal
 import sys
 
 from admin_bot import register_admin_handlers
-from bot_runner import run_bot_polling
 from config import load_env_config, load_settings
-from kv_sync import run_kv_sync
 from storage import get_connection, init_db
 from tg_listener import build_client, register_handlers
 
@@ -42,16 +41,19 @@ async def run() -> None:
 
     settings = load_settings()
     if not settings.channels:
-        logger.warning(
-            "Каналы не найдены в config.json. "
-            "Откройте Mini App (/admin в боте) и добавьте каналы. "
-            "KV sync обновит config.json через %d сек.", 30
-        )
+        logger.warning("Каналов нет. Добавьте через Telegram: /addchannel @username")
 
-    logger.info(
-        "Запуск news-relay | admin=%d | webapp=%s",
-        cfg.admin_tg_id, cfg.webapp_url,
-    )
+    logger.info("Запуск news-relay | admin_id=%d", cfg.admin_tg_id)
+
+    if cfg.webapp_enabled:
+        logger.info("Mini App: %s", cfg.webapp_url)
+    else:
+        logger.info("Mini App не настроен — управление через текстовые команды в Telegram")
+
+    if cfg.cf_enabled:
+        logger.info("Cloudflare KV sync: включён")
+    else:
+        logger.info("Cloudflare KV: не настроен — используется локальный config.json")
 
     db = get_connection()
     init_db(db)
@@ -60,11 +62,22 @@ async def run() -> None:
     register_handlers(client, cfg, db)
     register_admin_handlers(client, cfg)
 
+    # Собираем только нужные задачи
+    tasks = []
+
+    if cfg.webapp_enabled:
+        from bot_runner import run_bot_polling
+        tasks.append(run_bot_polling(cfg.bot_token, cfg.admin_tg_id, cfg.webapp_url))
+
+    if cfg.cf_enabled:
+        from kv_sync import run_kv_sync
+        tasks.append(run_kv_sync(cfg.cf_account_id, cfg.cf_kv_namespace_id, cfg.cf_api_token))
+
     loop = asyncio.get_running_loop()
     stop_event = asyncio.Event()
 
     def _shutdown(sig_name: str) -> None:
-        logger.info("Сигнал %s — завершаем работу...", sig_name)
+        logger.info("Сигнал %s — завершаем...", sig_name)
         stop_event.set()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -74,13 +87,12 @@ async def run() -> None:
             pass
 
     await client.start()
-    logger.info("Telethon подключён. Напишите /admin боту чтобы открыть панель.")
+    logger.info("Telethon подключён. Жду сообщений.")
 
     await asyncio.gather(
         client.run_until_disconnected(),
-        run_bot_polling(cfg.bot_token, cfg.admin_tg_id, cfg.webapp_url),
-        run_kv_sync(cfg.cf_account_id, cfg.cf_kv_namespace_id, cfg.cf_api_token),
         _wait_stop(stop_event, client, db),
+        *tasks,
         return_exceptions=True,
     )
 
